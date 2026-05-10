@@ -15,8 +15,7 @@ TOKEN = os.getenv('TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
+model = genai.GenerativeModel('gemini-2.0-flash')
 SYSTEM_PROMPT = """Ты — личный тренер по имени Hunter. Строгий, но справедливый профессиональный фитнес-тренер и нутрициолог.
 
 Правила:
