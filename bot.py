@@ -262,6 +262,20 @@ def update_history(context: ContextTypes.DEFAULT_TYPE, user_msg: str, bot_reply:
     if len(context.user_data['history']) > 30:
         context.user_data['history'] = context.user_data['history'][-30:]
 
+async def safe_send(message, text: str, reply_markup=None):
+    """Отправка с fallback: Markdown -> plain text"""
+    chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
+    for i, chunk in enumerate(chunks):
+        kb = reply_markup if i == len(chunks) - 1 else None
+        try:
+            await message.reply_text(chunk, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
+        except TelegramError as e:
+            logger.warning(f"Markdown failed, sending plain: {e}")
+            try:
+                await message.reply_text(chunk, reply_markup=kb)
+            except TelegramError as e2:
+                logger.error(f"Send failed: {e2}")
+
 # ─── HANDLERS ────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Старт бота"""
@@ -325,7 +339,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         reply = await ask_groq(user_message, history)
         update_history(context, user_message, reply)
-        await query.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await safe_send(query.message, reply, reply_markup=get_main_keyboard())
     except Exception as e:
         logger.error(f"Callback error: {e}")
         await query.message.reply_text("❌ Ошибка соединения. Попробуй ещё раз!")
@@ -386,16 +400,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = await ask_groq(user_message, context.user_data['history'])
         update_history(context, user_message, reply)
 
-        # Разбиваем длинные сообщения
-        if len(reply) > 4096:
-            parts = [reply[i:i+4096] for i in range(0, len(reply), 4096)]
-            for i, part in enumerate(parts):
-                if i == len(parts) - 1:
-                    await update.message.reply_text(part, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
-                else:
-                    await update.message.reply_text(part, parse_mode=ParseMode.MARKDOWN)
-        else:
-            await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await safe_send(update.message, reply, reply_markup=get_main_keyboard())
 
     except Exception as e:
         logger.error(f"Handle text error: {e}")
